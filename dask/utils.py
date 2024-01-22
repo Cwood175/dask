@@ -15,7 +15,7 @@ from collections.abc import Hashable, Iterable, Iterator, Mapping, Set
 from contextlib import contextmanager, nullcontext, suppress
 from datetime import datetime, timedelta
 from errno import ENOENT
-from functools import lru_cache, wraps
+from functools import wraps
 from importlib import import_module
 from numbers import Integral, Number
 from operator import add
@@ -148,7 +148,7 @@ def _deprecated_kwarg(
     new_arg_name: str | None = None,
     mapping: Mapping[Any, Any] | Callable[[Any], Any] | None = None,
     stacklevel: int = 2,
-    comment: str | None = None
+    comment: str | None = None,
 ) -> Callable[[F], F]:
     """
     Decorator to deprecate a keyword argument of a function.
@@ -229,9 +229,9 @@ def _deprecated_kwarg(
             if old_arg_value is not no_default:
                 if new_arg_name is None:
                     msg = (
-                        f"the {repr(old_arg_name)} keyword is deprecated and "
+                        f"the {old_arg_name!r} keyword is deprecated and "
                         "will be removed in a future version. Please take "
-                        f"steps to stop the use of {repr(old_arg_name)}"
+                        f"steps to stop the use of {old_arg_name!r}"
                     ) + comment
                     warnings.warn(msg, FutureWarning, stacklevel=stacklevel)
                     kwargs[old_arg_name] = old_arg_value
@@ -243,22 +243,24 @@ def _deprecated_kwarg(
                     else:
                         new_arg_value = mapping.get(old_arg_value, old_arg_value)
                     msg = (
-                        f"the {old_arg_name}={repr(old_arg_value)} keyword is "
+                        f"the {old_arg_name}={old_arg_value!r} keyword is "
                         "deprecated, use "
-                        f"{new_arg_name}={repr(new_arg_value)} instead."
+                        f"{new_arg_name}={new_arg_value!r} instead."
                     )
                 else:
                     new_arg_value = old_arg_value
                     msg = (
-                        f"the {repr(old_arg_name)} keyword is deprecated, "
-                        f"use {repr(new_arg_name)} instead."
+                        f"the {old_arg_name!r} keyword is deprecated, "
+                        f"use {new_arg_name!r} instead."
                     )
 
-                warnings.warn(msg + comment, FutureWarning, stacklevel=stacklevel)
+                warnings.warn(
+                    msg + (comment or ""), FutureWarning, stacklevel=stacklevel
+                )
                 if kwargs.get(new_arg_name) is not None:
                     msg = (
-                        f"Can only specify {repr(old_arg_name)} "
-                        f"or {repr(new_arg_name)}, not both."
+                        f"Can only specify {old_arg_name!r} "
+                        f"or {new_arg_name!r}, not both."
                     )
                     raise TypeError(msg)
                 kwargs[new_arg_name] = new_arg_value
@@ -435,9 +437,8 @@ def changed_cwd(new_cwd):
 
 @contextmanager
 def tmp_cwd(dir=None):
-    with tmpdir(dir) as dirname:
-        with changed_cwd(dirname):
-            yield dirname
+    with tmpdir(dir) as dirname, changed_cwd(dirname):
+        yield dirname
 
 
 class IndexCallable:
@@ -837,11 +838,7 @@ def ignore_warning(doc, cls, name, extra="", skipblocks=0, inconsistencies=None)
     import inspect
 
     if inspect.isclass(cls):
-        l1 = "This docstring was copied from {}.{}.{}.\n\n".format(
-            cls.__module__,
-            cls.__name__,
-            name,
-        )
+        l1 = f"This docstring was copied from {cls.__module__}.{cls.__name__}.{name}.\n\n"
     else:
         l1 = f"This docstring was copied from {cls.__name__}.{name}.\n\n"
     l2 = "Some inconsistencies with the Dask version may exist."
@@ -1164,7 +1161,7 @@ def insert(tup, loc, val):
 def dependency_depth(dsk):
     deps, _ = get_deps(dsk)
 
-    @lru_cache(maxsize=None)
+    @functools.cache
     def max_depth_by_deps(key):
         if not deps[key]:
             return 1
@@ -1832,15 +1829,13 @@ timedelta_sizes.update({k.upper(): v for k, v in timedelta_sizes.items()})
 
 
 @overload
-def parse_timedelta(s: None, default: str | Literal[False] = "seconds") -> None:
-    ...
+def parse_timedelta(s: None, default: str | Literal[False] = "seconds") -> None: ...
 
 
 @overload
 def parse_timedelta(
     s: str | float | timedelta, default: str | Literal[False] = "seconds"
-) -> float:
-    ...
+) -> float: ...
 
 
 def parse_timedelta(s, default="seconds"):
@@ -2211,8 +2206,6 @@ def show_versions() -> None:
             result[modname] = None
 
     stdout.writelines(dumps(result, indent=2))
-
-    return
 
 
 def maybe_pluralize(count, noun, plural_form=None):
