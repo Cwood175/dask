@@ -528,6 +528,9 @@ def assert_eq_dtypes(a, b):
     tm.assert_series_equal(a.dtypes.value_counts(), b.dtypes.value_counts())
 
 
+assert_eq_dtypes = assert_eq_dtypes
+
+
 def assert_eq(
     a,
     b,
@@ -588,6 +591,9 @@ def assert_eq(
     return True
 
 
+assert_eq = assert_eq
+
+
 def assert_dask_graph(dask, label):
     if hasattr(dask, "dask"):
         dask = dask.dask
@@ -598,6 +604,9 @@ def assert_dask_graph(dask, label):
         if k.startswith(label):
             return True
     raise AssertionError(f"given dask graph doesn't contain label: {label}")
+
+
+assert_dask_graph = assert_dask_graph
 
 
 def assert_divisions(ddf, scheduler=None):
@@ -612,6 +621,9 @@ def assert_divisions(ddf, scheduler=None):
     ddf.enforce_runtime_divisions().compute(scheduler=scheduler)
 
 
+assert_divisions = assert_divisions
+
+
 def assert_sane_keynames(ddf):
     if hasattr(ddf, "__dask_graph__"):
         dsk = ddf.optimize()
@@ -623,6 +635,9 @@ def assert_sane_keynames(ddf):
             assert len(k) < 100
             assert " " not in k
             assert k.split("-")[0].isidentifier(), k
+
+
+assert_sane_keynames = assert_sane_keynames
 
 
 def assert_dask_dtypes(ddf, res, numeric_equal=True):
@@ -663,12 +678,18 @@ def assert_dask_dtypes(ddf, res, numeric_equal=True):
             assert type(ddf._meta) == type(res)
 
 
+assert_dask_dtypes = assert_dask_dtypes
+
+
 def assert_max_deps(x, n, eq=True):
     dependencies, dependents = get_deps(x.dask)
     if eq:
         assert max(map(len, dependencies.values())) == n
     else:
         assert max(map(len, dependencies.values())) <= n
+
+
+assert_max_deps = assert_max_deps
 
 
 def valid_divisions(divisions):
@@ -715,6 +736,9 @@ def valid_divisions(divisions):
     return divisions[-2] <= divisions[-1]
 
 
+valid_divisions = valid_divisions
+
+
 def drop_by_shallow_copy(df, columns, errors="raise"):
     """Use shallow copy to drop columns in place"""
     df2 = df.copy(deep=False)
@@ -724,8 +748,14 @@ def drop_by_shallow_copy(df, columns, errors="raise"):
     return df2
 
 
+drop_by_shallow_copy = drop_by_shallow_copy
+
+
 class AttributeNotImplementedError(NotImplementedError, AttributeError):
     """NotImplementedError and AttributeError"""
+
+
+AttributeNotImplementedError = AttributeNotImplementedError
 
 
 def meta_frame_constructor(like):
@@ -751,6 +781,9 @@ def meta_frame_constructor(like):
         raise TypeError(f"{type(like)} not supported by meta_frame_constructor")
 
 
+meta_frame_constructor = meta_frame_constructor
+
+
 def meta_series_constructor(like):
     """Return a serial Series constructor
 
@@ -774,9 +807,15 @@ def meta_series_constructor(like):
         raise TypeError(f"{type(like)} not supported by meta_series_constructor")
 
 
+meta_series_constructor = meta_series_constructor
+
+
 def get_string_dtype():
     """Depending on config setting, we might convert objects to pyarrow strings"""
     return pd.StringDtype("pyarrow") if pyarrow_strings_enabled() else object
+
+
+get_string_dtype = get_string_dtype
 
 
 def pyarrow_strings_enabled() -> bool:
@@ -787,5 +826,11 @@ def pyarrow_strings_enabled() -> bool:
     return convert_string
 
 
+pyarrow_strings_enabled = pyarrow_strings_enabled
+
+
 def get_numeric_only_kwargs(numeric_only: bool | NoDefault) -> dict:
     return {} if numeric_only is no_default else {"numeric_only": numeric_only}
+
+
+get_numeric_only_kwargs = get_numeric_only_kwargs

@@ -20,6 +20,19 @@ import dask.dataframe as dd
 # Set DataFrame backend for this module
 pd = _backend_library()
 
+# Ensure the installed distributed version is compatible with the pinned dask version.
+# The dask_expr tests import internal distributed.shuffle APIs that may be missing
+# in newer distributed releases, causing ImportError during expression optimization.
+import distributed
+from packaging.version import Version
+
+if Version(distributed.__version__) >= Version("2024.1.0"):
+    raise ImportError(
+        "This test suite requires a distributed version compatible with the pinned dask. "
+        f"Installed distributed {distributed.__version__} is too new. "
+        "Please install a compatible distributed release (e.g., pip install 'distributed<2024.1.0')."
+    )
+
 
 @pytest.fixture
 def pdf():
