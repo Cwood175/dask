@@ -2236,9 +2236,18 @@ def get_default_shuffle_method() -> str:
 
     try:
         from distributed.shuffle import check_minimal_arrow_version
+    except ImportError:
+        # Newer distributed versions no longer expose this helper; fall back
+        # to checking for pyarrow availability directly.
+        try:
+            import pyarrow  # noqa: F401
+        except ImportError:
+            return "tasks"
+        return "p2p"
 
+    try:
         check_minimal_arrow_version()
-    except ModuleNotFoundError:
+    except ImportError:
         return "tasks"
     return "p2p"
 

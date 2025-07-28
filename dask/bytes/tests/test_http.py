@@ -196,11 +196,11 @@ def test_parquet(engine):
 )
 @pytest.mark.network
 def test_bag():
-    # This test pulls from different hosts
+    # This test pulls from remote hosts
     urls = [
         "https://raw.githubusercontent.com/weierophinney/pastebin/"
         "master/public/js-src/dojox/data/tests/stores/patterns.csv",
-        "https://en.wikipedia.org",
+        "https://raw.githubusercontent.com/dask/dask/main/README.rst",
     ]
     b = db.read_text(urls)
     assert b.npartitions == 2

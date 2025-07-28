@@ -117,10 +117,51 @@ def pack_exception(e, dumps):
     tb = _pack_traceback(exc_traceback)
     try:
         result = dumps((e, tb))
-    except Exception as e:
-        exc_type, exc_value, exc_traceback = sys.exc_info()
-        tb = _pack_traceback(exc_traceback)
-        result = dumps((e, tb))
+    except Exception as serialization_error:
+        # The original exception (or something reachable from it, such as a
+        # chained ``__context__``) cannot be serialized. Build a plain,
+        # always-picklable exception that carries the original information as
+        # text, so the worker reports the error instead of crashing.
+        import traceback as _traceback_module
+
+        try:
+            original = f"{type(e).__name__}: {e}"
+        except Exception:
+            original = type(e).__name__
+        try:
+            tb_text = "".join(
+                _traceback_module.format_exception(type(e), e, exc_traceback)
+            )
+        except Exception:
+            tb_text = "<traceback unavailable>"
+        try:
+            reason = f"{type(serialization_error).__name__}: {serialization_error}"
+        except Exception:
+            reason = type(serialization_error).__name__
+
+        fallback = RuntimeError(
+            f"{original}\n\n(The original exception could not be serialized "
+            f"to send back from the worker process: {reason})\n\n"
+            f"Original traceback:\n{tb_text}"
+        )
+        fallback.__cause__ = None
+        fallback.__context__ = None
+        fallback.__suppress_context__ = True
+        fallback.__traceback__ = None
+        try:
+            result = dumps((fallback, None))
+        except Exception:
+            minimal = RuntimeError(original)
+            minimal.__cause__ = None
+            minimal.__context__ = None
+            minimal.__suppress_context__ = True
+            minimal.__traceback__ = None
+            try:
+                result = dumps((minimal, None))
+            except Exception:
+                result = dumps(
+                    (RuntimeError("Unserializable exception raised in worker"), None)
+                )
     return result
 
 
