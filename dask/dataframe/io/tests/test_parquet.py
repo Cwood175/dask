@@ -1006,7 +1006,7 @@ def test_read_parquet_custom_columns(tmpdir, engine):
         (pd.DataFrame({"x": ["cc", "a", "bbb"]}), {}, {}),
         (
             pd.DataFrame({"x": [b"a", b"b", b"c"]}),
-            {"schema": {"x": pa.binary()} if pa else None},
+            {"schema": {"x": pa.binary()}} if pa else {},
             {},
         ),
         (
