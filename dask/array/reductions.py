@@ -1581,6 +1581,9 @@ def quantile(
     if builtins.any(a.numblocks[ax] > 1 for ax in axis):
         a = a.rechunk({ax: -1 if ax in axis else "auto" for ax in range(a.ndim)})
 
+    if interpolation is not None:
+        method = interpolation
+
     if NUMPY_GE_200:
         kwargs = {"weights": weights}
     else:
@@ -1590,7 +1593,6 @@ def quantile(
         np.quantile,
         q=q,
         method=method,
-        interpolation=interpolation,
         axis=axis,
         keepdims=keepdims,
         drop_axis=axis if not keepdims else None,
@@ -1629,8 +1631,10 @@ def _custom_quantile(
     keepdims=False,
     **kwargs,
 ):
+    if interpolation is not None:
+        method = interpolation
     if (
-        not {method, interpolation}.issubset({"linear", None})
+        method != "linear"
         or len(axis) != 1
         or axis[0] != len(a.shape) - 1
         or len(a.shape) == 1
@@ -1643,7 +1647,6 @@ def _custom_quantile(
             q,
             axis=axis,
             method=method,
-            interpolation=interpolation,
             keepdims=keepdims,
             **kwargs,
         )
@@ -1732,6 +1735,9 @@ def nanquantile(
     if builtins.any(a.numblocks[ax] > 1 for ax in axis):
         a = a.rechunk({ax: -1 if ax in axis else "auto" for ax in range(a.ndim)})
 
+    if interpolation is not None:
+        method = interpolation
+
     if (
         numbagg is not None
         and Version(numbagg.__version__).release >= (0, 8, 0)
@@ -1747,7 +1753,6 @@ def nanquantile(
         kwargs = {
             "q": q,
             "method": method,
-            "interpolation": interpolation,
             "keepdims": keepdims,
         }
         if NUMPY_GE_200:

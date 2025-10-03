@@ -3964,7 +3964,9 @@ def test_shift_with_freq_TimedeltaIndex():
     df = _compat.makeTimeDataFrame()
     # TimedeltaIndex
     for data_freq in ["min", "D", "h"]:
-        df = df.set_index(_compat.makeTimedeltaIndex(30, freq=data_freq))
+        df = df.set_index(
+            _compat.makeTimedeltaIndex(30, freq=data_freq).as_unit("ns")
+        )
         ddf = dd.from_pandas(df, npartitions=4)
         for freq in ["s", pd.Timedelta(10, unit="h")]:
             for d, p in [(ddf, df), (ddf.A, df.A), (ddf.index, df.index)]:

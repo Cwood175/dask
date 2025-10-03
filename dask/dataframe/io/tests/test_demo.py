@@ -343,6 +343,7 @@ def test_with_spec_datetime_index():
         column_specs=[ColumnSpec(dtype=int)],
     )
     ddf = with_spec(spec, seed=42)
-    assert ddf.index.dtype == "datetime64[ns]"
+    assert ddf.index.dtype.kind == "M"
     res = ddf.compute()
+    assert res.index.dtype.kind == "M"
     assert len(res) == 10

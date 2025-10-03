@@ -1007,12 +1007,14 @@ def test_nanquantile_all_nan():
     arr = np.random.randn(*shape)
     arr[:] = np.nan
     darr = da.from_array(arr, chunks=(2, 3, 4, -1))
-    da.nanquantile(darr, 0.75, axis=-1).compute()
-    with pytest.raises(RuntimeWarning):
+    with pytest.warns(RuntimeWarning, match="All-NaN"):
         assert_eq(
             da.nanquantile(darr, 0.75, axis=-1), np.nanquantile(arr, 0.75, axis=-1)
         )
-        assert_eq(da.percentile(darr, 0.75, axis=-1), np.percentile(arr, 0.75, axis=-1))
+    with pytest.warns(RuntimeWarning, match="All-NaN"):
+        assert_eq(
+            da.nanpercentile(darr, 0.75, axis=-1), np.nanpercentile(arr, 0.75, axis=-1)
+        )
 
 
 def test_nanquantile_method():

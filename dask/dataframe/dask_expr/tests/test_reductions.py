@@ -114,9 +114,14 @@ def test_value_counts(pdf, df, split_every, split_out):
 def test_value_counts_sort(pdf):
     pdf = pdf.iloc[4:]
     df = from_pandas(pdf, npartitions=10)
+    result = df.y.value_counts(split_out=1).compute()
+    expected = pdf.y.value_counts()
+    # Counts must be sorted in descending order; the order of tied counts
+    # is not guaranteed, so compare contents independently of tie order.
+    assert result.is_monotonic_decreasing
     pd.testing.assert_series_equal(
-        df.y.value_counts(split_out=1).compute(),
-        pdf.y.value_counts(),
+        result.sort_index(),
+        expected.sort_index(),
     )
 
 

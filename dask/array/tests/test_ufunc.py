@@ -30,7 +30,9 @@ def test_ufunc_meta(name):
     assert disclaimer in ufunc.__doc__
 
     assert (
-        ufunc.__doc__.replace(disclaimer, "").replace(skip_test, "")
+        ufunc.__doc__.replace(disclaimer, "")
+        .replace(skip_test, "")
+        .replace(" (Not supported in Dask)", "")
         == getattr(np, name).__doc__
     )
 
@@ -548,6 +550,7 @@ def test_ufunc_where_broadcasts(left_is_da, right_is_da, where_is_da):
     assert_eq(expected, result)
 
 
+@pytest.mark.filterwarnings("ignore:'where' used without 'out':UserWarning")
 def test_ufunc_where_no_out():
     left = np.arange(4)
     right = np.arange(4, 8)

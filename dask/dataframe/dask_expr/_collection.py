@@ -4266,8 +4266,8 @@ class Series(FrameBase):
                 else:
                     split_out = True
             else:
-                split_out = True
-        if split_out == 1 and split_out is not True and sort is None:
+                split_out = 1
+        if split_out == 1 and sort is None:
             sort = True
 
         length = None

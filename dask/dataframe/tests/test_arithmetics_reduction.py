@@ -744,7 +744,7 @@ def test_reductions_non_numeric_dtypes():
         assert_eq(dds.min(), pds.min())
         assert_eq(dds.max(), pds.max())
         assert_eq(dds.count(), pds.count())
-        if pds.dtype != "datetime64[ns]":
+        if not pd.api.types.is_datetime64_any_dtype(pds.dtype):
             # std is implemented for datetimes in pandas 1.2.0, but dask
             # implementation depends on var which isn't
             check_raises(dds, pds, "std")
