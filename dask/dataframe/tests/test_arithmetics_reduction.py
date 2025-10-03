@@ -713,8 +713,12 @@ def test_reductions_non_numeric_dtypes():
         pytest.xfail(reason="known failure with arrow strings")
 
     def check_raises(d, p, func):
-        pytest.raises((TypeError, ValueError), lambda: getattr(d, func)().compute())
-        pytest.raises((TypeError, ValueError), lambda: getattr(p, func)())
+        try:
+            expected = getattr(p, func)()
+        except (TypeError, ValueError):
+            pytest.raises((TypeError, ValueError), lambda: getattr(d, func)().compute())
+        else:
+            assert_eq(getattr(d, func)(), expected)
 
     pds = pd.Series(["a", "b", "c", "d", "e"])
     dds = dd.from_pandas(pds, 2)

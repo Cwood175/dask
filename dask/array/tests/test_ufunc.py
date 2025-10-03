@@ -29,10 +29,9 @@ def test_ufunc_meta(name):
     assert ufunc.__name__ == name
     assert disclaimer in ufunc.__doc__
 
-    assert (
-        ufunc.__doc__.replace(disclaimer, "").replace(skip_test, "")
-        == getattr(np, name).__doc__
-    )
+    assert ufunc.__doc__.replace(disclaimer, "").replace(skip_test, "") == getattr(
+        np, name
+    ).__doc__.replace(skip_test, "")
 
 
 def test_ufunc():
@@ -557,7 +556,9 @@ def test_ufunc_where_no_out():
     d_left = da.from_array(left, chunks=2)
     d_right = da.from_array(right, chunks=2)
 
-    expected = np.add(left, right, where=where)
+    with np.testing.suppress_warnings() as sup:
+        sup.filter(UserWarning)
+        expected = np.add(left, right, where=where)
     result = da.add(d_left, d_right, where=d_where)
 
     # If no `out` is provided, numpy leaves elements that don't match `where`

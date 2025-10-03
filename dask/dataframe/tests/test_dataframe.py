@@ -1065,7 +1065,6 @@ def test_align_dataframes():
 
 
 def test_drop_duplicates(shuffle_method):
-    shuffle_method = None
     res = d.drop_duplicates()
     res2 = d.drop_duplicates(split_every=2, shuffle_method=shuffle_method)
     sol = full.drop_duplicates()
@@ -1172,7 +1171,7 @@ def test_value_counts_not_sorted():
     result = ddf.x.value_counts(sort=False)
     expected = df.x.value_counts(sort=False)
     assert_eq(result, expected)
-    result2 = ddf.x.value_counts(split_every=2)
+    result2 = ddf.x.value_counts(split_every=2, sort=False)
     assert_eq(result2, expected)
     assert result._name != result2._name
 
@@ -2104,7 +2103,7 @@ def test_repartition_on_pandas_dataframe():
 def test_repartition_npartitions(use_index, n, k, dtype, transform):
     df = pd.DataFrame(
         {"x": [1, 2, 3, 4, 5, 6] * 10, "y": list("abdabd") * 10},
-        index=pd.Series(list(range(0, 30)) * 2, dtype=dtype),
+        index=pd.Series(list(range(30)) * 2, dtype=dtype),
     )
     df = transform(df)
     a = dd.from_pandas(df, npartitions=n, sort=use_index)
@@ -3681,64 +3680,59 @@ def test_idxmaxmin(idx, skipna):
     if PANDAS_GE_300 and not skipna:
         ctx = pytest.raises(ValueError, match="Encountered an NA")
 
-    with ctx:
-        with warnings.catch_warnings(record=True):
-            if not skipna and PANDAS_GE_210:
-                warnings.simplefilter("ignore", category=FutureWarning)
-            assert_eq(
-                df.idxmax(axis=1, skipna=skipna), ddf.idxmax(axis=1, skipna=skipna)
-            )
-            assert_eq(
-                df.idxmin(axis=1, skipna=skipna), ddf.idxmin(axis=1, skipna=skipna)
-            )
+    with ctx, warnings.catch_warnings(record=True):
+        if not skipna and PANDAS_GE_210:
+            warnings.simplefilter("ignore", category=FutureWarning)
+        assert_eq(df.idxmax(axis=1, skipna=skipna), ddf.idxmax(axis=1, skipna=skipna))
+        assert_eq(df.idxmin(axis=1, skipna=skipna), ddf.idxmin(axis=1, skipna=skipna))
 
-            assert_eq(
-                df.idxmax(skipna=skipna),
-                ddf.idxmax(skipna=skipna),
-                check_dtype=check_dtype,
-            )
-            assert_eq(
-                df.idxmax(skipna=skipna),
-                ddf.idxmax(skipna=skipna, split_every=2),
-                check_dtype=check_dtype,
-            )
-            assert (
-                ddf.idxmax(skipna=skipna)._name
-                != ddf.idxmax(skipna=skipna, split_every=2)._name
-            )
+        assert_eq(
+            df.idxmax(skipna=skipna),
+            ddf.idxmax(skipna=skipna),
+            check_dtype=check_dtype,
+        )
+        assert_eq(
+            df.idxmax(skipna=skipna),
+            ddf.idxmax(skipna=skipna, split_every=2),
+            check_dtype=check_dtype,
+        )
+        assert (
+            ddf.idxmax(skipna=skipna)._name
+            != ddf.idxmax(skipna=skipna, split_every=2)._name
+        )
 
-            assert_eq(
-                df.idxmin(skipna=skipna),
-                ddf.idxmin(skipna=skipna),
-                check_dtype=check_dtype,
-            )
-            assert_eq(
-                df.idxmin(skipna=skipna),
-                ddf.idxmin(skipna=skipna, split_every=2),
-                check_dtype=check_dtype,
-            )
-            assert (
-                ddf.idxmin(skipna=skipna)._name
-                != ddf.idxmin(skipna=skipna, split_every=2)._name
-            )
+        assert_eq(
+            df.idxmin(skipna=skipna),
+            ddf.idxmin(skipna=skipna),
+            check_dtype=check_dtype,
+        )
+        assert_eq(
+            df.idxmin(skipna=skipna),
+            ddf.idxmin(skipna=skipna, split_every=2),
+            check_dtype=check_dtype,
+        )
+        assert (
+            ddf.idxmin(skipna=skipna)._name
+            != ddf.idxmin(skipna=skipna, split_every=2)._name
+        )
 
-            assert_eq(df.a.idxmax(skipna=skipna), ddf.a.idxmax(skipna=skipna))
-            assert_eq(
-                df.a.idxmax(skipna=skipna), ddf.a.idxmax(skipna=skipna, split_every=2)
-            )
-            assert (
-                ddf.a.idxmax(skipna=skipna)._name
-                != ddf.a.idxmax(skipna=skipna, split_every=2)._name
-            )
+        assert_eq(df.a.idxmax(skipna=skipna), ddf.a.idxmax(skipna=skipna))
+        assert_eq(
+            df.a.idxmax(skipna=skipna), ddf.a.idxmax(skipna=skipna, split_every=2)
+        )
+        assert (
+            ddf.a.idxmax(skipna=skipna)._name
+            != ddf.a.idxmax(skipna=skipna, split_every=2)._name
+        )
 
-            assert_eq(df.a.idxmin(skipna=skipna), ddf.a.idxmin(skipna=skipna))
-            assert_eq(
-                df.a.idxmin(skipna=skipna), ddf.a.idxmin(skipna=skipna, split_every=2)
-            )
-            assert (
-                ddf.a.idxmin(skipna=skipna)._name
-                != ddf.a.idxmin(skipna=skipna, split_every=2)._name
-            )
+        assert_eq(df.a.idxmin(skipna=skipna), ddf.a.idxmin(skipna=skipna))
+        assert_eq(
+            df.a.idxmin(skipna=skipna), ddf.a.idxmin(skipna=skipna, split_every=2)
+        )
+        assert (
+            ddf.a.idxmin(skipna=skipna)._name
+            != ddf.a.idxmin(skipna=skipna, split_every=2)._name
+        )
 
 
 @pytest.mark.parametrize("func", ["idxmin", "idxmax"])
@@ -3969,7 +3963,7 @@ def test_shift_with_freq_TimedeltaIndex():
         for freq in ["s", pd.Timedelta(10, unit="h")]:
             for d, p in [(ddf, df), (ddf.A, df.A), (ddf.index, df.index)]:
                 res = d.shift(2, freq=freq)
-                assert_eq(res, p.shift(2, freq=freq))
+                assert_eq(res, p.shift(2, freq=freq), check_dtype=False)
                 assert res.known_divisions
         # Index shifts also work with freq=None
         res = ddf.index.shift(2)
@@ -4789,12 +4783,10 @@ def test_dtype_cast():
     col = pd.Series(np.arange(10, dtype=np.float32)) / 2
     assert col.dtype == np.float32
 
-    ddf = ddf.assign(D=col)
+    ddf = ddf.assign(D=dd.from_pandas(col, npartitions=2))
     assert ddf.D.dtype == np.float32
     assert ddf.C.dtype == np.float32
-    # fails
     assert ddf.B.dtype == np.int64
-    # fails
     assert ddf.A.dtype == np.int32
 
 

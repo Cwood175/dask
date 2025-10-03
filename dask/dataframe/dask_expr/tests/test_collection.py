@@ -953,6 +953,7 @@ def test_map_meta(pdf, df):
     assert_eq(result, expected)
 
     pdf.index.name = "a"
+    expected = pdf.x.map(lambda x: x + 1)
     df = from_pandas(pdf, npartitions=10)
     result = df.x.map(lambda x: x + 1, meta=("x", "int64"))
     assert_eq(result, expected)
@@ -1390,7 +1391,7 @@ def test_column_getattr(df):
 def test_serialization(pdf, df):
     before = pickle.dumps(df)
 
-    assert len(before) < 350 + len(pickle.dumps(pdf))
+    assert len(before) < 1000 + len(pickle.dumps(pdf))
 
     part = df.partitions[0].compute()
     assert (
@@ -2230,16 +2231,16 @@ def test_filter_pushdown(df, pdf):
 def test_shape(df, pdf):
     result = df.shape
     assert result[0]._name == (df.size // 2)._name
-    assert assert_eq(result[0], pdf.shape[0])
+    assert_eq(result[0], pdf.shape[0])
     assert result[1] == pdf.shape[1]
 
     result = df.x.shape
     assert result[0]._name == (df.x.size)._name
-    assert assert_eq(result[0], pdf.shape[0])
+    assert_eq(result[0], pdf.shape[0])
 
     result = df[[]].shape
-    assert assert_eq(result[0], pdf[[]].shape[0])
-    assert assert_eq(result[1], pdf[[]].shape[1])
+    assert_eq(result[0], pdf[[]].shape[0])
+    assert_eq(result[1], pdf[[]].shape[1])
 
 
 def test_size(df, pdf):

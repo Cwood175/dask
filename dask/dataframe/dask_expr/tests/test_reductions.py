@@ -117,6 +117,7 @@ def test_value_counts_sort(pdf):
     pd.testing.assert_series_equal(
         df.y.value_counts(split_out=1).compute(),
         pdf.y.value_counts(),
+        check_like=True,
     )
 
 

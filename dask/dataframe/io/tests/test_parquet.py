@@ -1607,8 +1607,8 @@ def test_parquet_select_cats(tmpdir, engine):
                 np.random.choice(["a", "b", "c", "d", "e", "f"], size=100),
                 dtype="category",
             ),
-            "ints": pd.Series(list(range(0, 100)), dtype="int"),
-            "floats": pd.Series(list(range(0, 100)), dtype="float"),
+            "ints": pd.Series(list(range(100)), dtype="int"),
+            "floats": pd.Series(list(range(100)), dtype="float"),
         }
     )
 
@@ -1649,7 +1649,7 @@ def check_compression(engine, filename, compression):
                 assert column.total_compressed_size != column.total_uncompressed_size
 
 
-@pytest.mark.parametrize("compression,", [None, "gzip", "snappy"])
+@pytest.mark.parametrize("compression", [None, "gzip", "snappy"])
 def test_writing_parquet_with_compression(tmpdir, compression, engine):
     fn = str(tmpdir)
 
@@ -1663,7 +1663,7 @@ def test_writing_parquet_with_compression(tmpdir, compression, engine):
     check_compression(engine, fn, compression)
 
 
-@pytest.mark.parametrize("compression,", [None, "gzip", "snappy"])
+@pytest.mark.parametrize("compression", [None, "gzip", "snappy"])
 def test_writing_parquet_with_partition_on_and_compression(tmpdir, compression, engine):
     fn = str(tmpdir)
 
@@ -3403,7 +3403,7 @@ def test_custom_metadata(tmpdir, engine):
         files += [os.path.join(path, "_metadata")]
         for fn in files:
             _md = pq.ParquetFile(fn).metadata.metadata
-            for k in custom_metadata.keys():
+            for k in custom_metadata:
                 assert _md[k] == custom_metadata[k]
 
     # Make sure we raise an error if the custom metadata

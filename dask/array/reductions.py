@@ -1589,8 +1589,7 @@ def quantile(
     result = a.map_blocks(
         np.quantile,
         q=q,
-        method=method,
-        interpolation=interpolation,
+        method=interpolation if interpolation is not None else method,
         axis=axis,
         keepdims=keepdims,
         drop_axis=axis if not keepdims else None,
@@ -1642,8 +1641,7 @@ def _custom_quantile(
             a,
             q,
             axis=axis,
-            method=method,
-            interpolation=interpolation,
+            method=interpolation if interpolation is not None else method,
             keepdims=keepdims,
             **kwargs,
         )
@@ -1671,7 +1669,7 @@ def _custom_quantile(
 
     quantiles = []
     reshape_shapes = (1,) + tuple(sorted_arr.shape[:-1]) + ((1,) if keepdims else ())
-    for single_q in list(q):
+    for single_q in q:
         i = (
             np.ones(nr_quantiles) * (a.shape[-1] - 1)
             - np.isnan(sorted_arr).sum(axis=-1).reshape(-1)

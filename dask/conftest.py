@@ -2,12 +2,9 @@ from __future__ import annotations
 
 import pytest
 
-try:
-    from dask.dataframe.utils import pyarrow_strings_enabled
+import dask
 
-    convert_string = pyarrow_strings_enabled()
-except (ImportError, RuntimeError):
-    convert_string = False
+convert_string = dask.config.get("dataframe.convert-string", True)
 
 skip_with_pyarrow_strings = pytest.mark.skipif(
     convert_string,
