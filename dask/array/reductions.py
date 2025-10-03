@@ -1625,12 +1625,11 @@ def _custom_quantile(
     q,
     axis=None,
     method="linear",
-    interpolation=None,
     keepdims=False,
     **kwargs,
 ):
     if (
-        not {method, interpolation}.issubset({"linear", None})
+        method not in {"linear", None}
         or len(axis) != 1
         or axis[0] != len(a.shape) - 1
         or len(a.shape) == 1
@@ -1643,7 +1642,6 @@ def _custom_quantile(
             q,
             axis=axis,
             method=method,
-            interpolation=interpolation,
             keepdims=keepdims,
             **kwargs,
         )
