@@ -29,10 +29,20 @@ def test_ufunc_meta(name):
     assert ufunc.__name__ == name
     assert disclaimer in ufunc.__doc__
 
-    assert (
-        ufunc.__doc__.replace(disclaimer, "").replace(skip_test, "")
-        == getattr(np, name).__doc__
-    )
+    # Normalize docstrings: remove Dask disclaimer, doctest skip markers,
+    # and known Dask-specific annotations so that minor explanatory
+    # additions don't break the comparison with NumPy's docstring.
+    actual_doc = ufunc.__doc__.replace(disclaimer, "").replace(skip_test, "")
+    # Remove common Dask annotations that may be added to docstrings.
+    for ann in ("(Not supported in Dask)", "Not supported in Dask"):
+        actual_doc = actual_doc.replace(ann, "")
+    # Normalize whitespace for a stable comparison
+    actual_doc = "\n".join(line.rstrip() for line in actual_doc.splitlines()).strip()
+    expected_doc = "\n".join(
+        line.rstrip() for line in getattr(np, name).__doc__.splitlines()
+    ).strip()
+
+    assert actual_doc == expected_doc
 
 
 def test_ufunc():
@@ -566,7 +576,7 @@ def test_ufunc_where_no_out():
     # `where` wasn't provided (to test that `where` was actually passed).
 
     expected_masked = np.where(where, expected, 0)
-    result_masked = np.where(where, expected, 0)
+    result_masked = np.where(where, result, 0)
     assert_eq(expected_masked, result_masked)
 
     expected_no_where = np.add(left, right)

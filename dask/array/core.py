@@ -7,8 +7,6 @@ import operator
 import os
 import pickle
 import re
-import sys
-import traceback
 import uuid
 import warnings
 from bisect import bisect
@@ -61,9 +59,8 @@ from dask.base import (
     persist,
     tokenize,
 )
-from dask.blockwise import BlockwiseDep
+from dask.blockwise import BlockwiseDep, broadcast_dimensions
 from dask.blockwise import blockwise as core_blockwise
-from dask.blockwise import broadcast_dimensions
 from dask.context import globalmethod
 from dask.core import quote, reshapelist
 from dask.delayed import Delayed, delayed
@@ -487,9 +484,12 @@ def apply_infer_dtype(func, args, kwargs, funcname, suggest_dtype="dtype", nout=
     try:
         with np.errstate(all="ignore"):
             o = func(*args, **kwargs)
-    except Exception as e:
-        exc_type, exc_value, exc_traceback = sys.exc_info()
-        tb = "".join(traceback.format_tb(exc_traceback))
+    except Exception:
+        # Do not mask the original exception type and traceback. Re-raise
+        # the original exception so callers/tests can observe the true
+        # underlying error (for example a TypeError raised by NumPy).
+        # We build a suggestion string here for potential use by callers, but
+        # we re-raise to preserve the original exception information.
         suggest = (
             (
                 "Please specify the dtype explicitly using the "
@@ -498,21 +498,59 @@ def apply_infer_dtype(func, args, kwargs, funcname, suggest_dtype="dtype", nout=
             if suggest_dtype
             else ""
         )
-        msg = (
-            f"`dtype` inference failed in `{funcname}`.\n\n"
-            f"{suggest}"
-            "Original error is below:\n"
-            "------------------------\n"
-            f"{e!r}\n\n"
-            "Traceback:\n"
-            "---------\n"
-            f"{tb}"
-        )
+        raise
+    # At this point, o is the result returned by func
+    if nout is None:
+        # Prefer the explicit dtype attribute if present
+        if hasattr(o, "dtype"):
+            return o.dtype
+        # Try to coerce the result to a NumPy dtype
+        try:
+            return np.dtype(o)
+        except Exception:
+            # Try using meta_from_array as a last resort for array-like objects
+            try:
+                meta = meta_from_array(o)
+                return meta.dtype
+            except Exception:
+                suggest = (
+                    (
+                        "Please specify the dtype explicitly using the "
+                        "`{dtype}` kwarg.\n\n".format(dtype=suggest_dtype)
+                    )
+                    if suggest_dtype
+                    else ""
+                )
+                raise TypeError(
+                    f"`dtype` inference failed in `{funcname}`. {suggest}"
+                    f"Could not derive dtype from result of `{funcname}`: {type(o)!r}"
+                )
     else:
-        msg = None
-    if msg is not None:
-        raise ValueError(msg)
-    return getattr(o, "dtype", type(o)) if nout is None else tuple(e.dtype for e in o)
+        dtypes = []
+        for e in o:
+            if hasattr(e, "dtype"):
+                dtypes.append(e.dtype)
+            else:
+                try:
+                    dtypes.append(np.dtype(e))
+                except Exception:
+                    try:
+                        meta = meta_from_array(e)
+                        dtypes.append(meta.dtype)
+                    except Exception:
+                        suggest = (
+                            (
+                                "Please specify the dtype explicitly using the "
+                                "`{dtype}` kwarg.\n\n".format(dtype=suggest_dtype)
+                            )
+                            if suggest_dtype
+                            else ""
+                        )
+                        raise TypeError(
+                            f"`dtype` inference failed in `{funcname}` for one of the outputs. {suggest}"
+                            f"Could not derive dtype from result element: {type(e)!r}"
+                        )
+        return tuple(dtypes)
 
 
 def normalize_arg(x):
@@ -4216,7 +4254,9 @@ def unify_chunks(*args, **kwargs):
                 (
                     chunkss[j]
                     if a.shape[n] > 1
-                    else a.shape[n] if not np.isnan(sum(chunkss[j])) else None
+                    else a.shape[n]
+                    if not np.isnan(sum(chunkss[j]))
+                    else None
                 )
                 for n, j in enumerate(i)
             )
@@ -4877,8 +4917,9 @@ def broadcast_shapes(*shapes):
             dim = 0 if 0 in sizes else np.max(sizes).item()
         if any(i not in [-1, 0, 1, dim] and not np.isnan(i) for i in sizes):
             raise ValueError(
-                "operands could not be broadcast together with "
-                "shapes {}".format(" ".join(map(str, shapes)))
+                "operands could not be broadcast together with " "shapes {}".format(
+                    " ".join(map(str, shapes))
+                )
             )
         out.append(dim)
     return tuple(reversed(out))

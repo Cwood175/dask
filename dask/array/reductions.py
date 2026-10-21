@@ -197,7 +197,7 @@ def nanprod(a, axis=None, dtype=None, keepdims=False, split_every=None, out=None
     if dtype is not None:
         dt = dtype
     else:
-        dt = getattr(chunk.nansum(np.ones((1,), dtype=a.dtype)), "dtype", object)
+        dt = getattr(chunk.nanprod(np.ones((1,), dtype=a.dtype)), "dtype", object)
     return reduction(
         a,
         chunk.nanprod,
@@ -1586,17 +1586,27 @@ def quantile(
     else:
         kwargs = {}
 
+    # Build call kwargs depending on NumPy version to avoid passing unsupported
+    # keyword arguments (e.g., 'interpolation' was removed in favor of 'method').
+    call_kwargs = {
+        "q": q,
+        "axis": axis,
+        "keepdims": keepdims,
+        "drop_axis": axis if not keepdims else None,
+        "new_axis": 0 if isinstance(q, Iterable) else None,
+        "chunks": _get_quantile_chunks(a, q, axis, keepdims),
+    }
+
+    if NUMPY_GE_200:
+        call_kwargs["method"] = method
+    else:
+        call_kwargs["interpolation"] = interpolation
+
+    call_kwargs.update(kwargs)
+
     result = a.map_blocks(
         np.quantile,
-        q=q,
-        method=method,
-        interpolation=interpolation,
-        axis=axis,
-        keepdims=keepdims,
-        drop_axis=axis if not keepdims else None,
-        new_axis=0 if isinstance(q, Iterable) else None,
-        chunks=_get_quantile_chunks(a, q, axis, keepdims),
-        **kwargs,
+        **call_kwargs,
     )
 
     result = handle_out(out, result)
@@ -1638,15 +1648,24 @@ def _custom_quantile(
     ):
         # bail to nanquantile. Assumptions are pretty strict for now but we
         # do cover the xarray.quantile case.
-        return np.nanquantile(
-            a,
-            q,
-            axis=axis,
-            method=method,
-            interpolation=interpolation,
-            keepdims=keepdims,
-            **kwargs,
-        )
+        if NUMPY_GE_200:
+            return np.nanquantile(
+                a,
+                q,
+                axis=axis,
+                method=method,
+                keepdims=keepdims,
+                **kwargs,
+            )
+        else:
+            return np.nanquantile(
+                a,
+                q,
+                axis=axis,
+                interpolation=interpolation,
+                keepdims=keepdims,
+                **kwargs,
+            )
     # nanquantile in NumPy is pretty slow if the quantile axis is slow because
     # each quantile has overhead.
     # This method works around this by calculating the quantile manually.
@@ -1752,6 +1771,9 @@ def nanquantile(
         }
         if NUMPY_GE_200:
             kwargs.update({"weights": weights})
+            # Newer NumPy versions do not accept the 'interpolation' keyword;
+            # remove it from kwargs to avoid passing an unsupported argument.
+            kwargs.pop("interpolation", None)
 
     result = a.map_blocks(
         func,

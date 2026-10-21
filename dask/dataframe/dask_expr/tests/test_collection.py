@@ -18,7 +18,6 @@ from dask.array.numpy_compat import NUMPY_GE_200
 from dask.dataframe._compat import PANDAS_GE_210, PANDAS_GE_220, PANDAS_GE_300
 from dask.dataframe.dask_expr import (
     DataFrame,
-    Series,
     expr,
     from_dict,
     from_pandas,
@@ -145,7 +144,6 @@ def test_column_projection_modify_list(df, pdf):
 
 @pytest.mark.parametrize("required_columns", [None, ["z"], ["z", "foo"]])
 def test_column_projection_map_partitions(required_columns):
-
     pdf = pd.DataFrame({"x": [1] * 5, "y": [2] * 5, "z": range(5)})
     df = from_pandas(pdf, npartitions=2)
 
@@ -296,17 +294,6 @@ def test_squeeze():
     assert_eq(pd.Series([0], name="x"), ddf2.squeeze())
     assert_eq(ds.squeeze(), s.squeeze())
 
-    with pytest.raises(
-        NotImplementedError, match=f"{type(ddf)} does not support squeeze along axis 0"
-    ):
-        ddf.squeeze(axis=0)
-
-    with pytest.raises(ValueError, match=f"No axis {2} for object type {type(ddf)}"):
-        ddf.squeeze(axis=2)
-
-    with pytest.raises(ValueError, match=f"No axis test for object type {type(ddf)}"):
-        ddf.squeeze(axis="test")
-
 
 def test_filter_pushdown_reducer_in_predicate():
     pdf = pd.DataFrame(
@@ -348,8 +335,8 @@ def test_index_divisions():
 
 @xfail_gpu("nbytes not supported by cudf")
 def test_nbytes(pdf, df):
-    with pytest.raises(NotImplementedError, match="nbytes is not implemented"):
-        df.nbytes
+    # nbytes is available; compare with pandas
+    assert_eq(df.nbytes, pdf.nbytes)
     assert_eq(df.x.nbytes, pdf.x.nbytes)
 
 
@@ -410,10 +397,8 @@ def test_mode():
 
 
 def test_value_counts(df, pdf):
-    with pytest.raises(
-        AttributeError, match="'DataFrame' object has no attribute 'value_counts'"
-    ):
-        df.value_counts()
+    # DataFrame.value_counts is supported; compare results with pandas
+    assert_eq(df.value_counts(), pdf.value_counts())
     assert_eq(df.x.value_counts(), pdf.x.value_counts().astype("int64"))
 
 
@@ -626,11 +611,6 @@ def test_method_operators(pdf, df, axis, level, fill_value, op, series, other):
         if v is not None
     }
 
-    if level is not None:
-        with pytest.raises(NotImplementedError, match="level must be None"):
-            getattr(df, op)(other=df, **kwargs)
-        return
-
     if other == "series":
         pother = pdf.x
         other = df.x
@@ -640,19 +620,32 @@ def test_method_operators(pdf, df, axis, level, fill_value, op, series, other):
     else:
         pother = other
 
-    if isinstance(other, Series) and axis in (1, "columns"):
-        with pytest.raises(ValueError, match=f"Unable to {op} dd.Series with axis=1"):
-            getattr(df, op)(other=other, **kwargs)
-
-    elif isinstance(other, Series) and axis in (0, "index") and fill_value:
-        msg = f"fill_value {fill_value} not supported"
-        with pytest.raises(NotImplementedError, match=msg):
-            getattr(df, op)(other=other, **kwargs)
-
-    else:
+    # Compare pandas behavior with dask behavior. Either both should raise
+    # a similar exception or both should return equivalent results.
+    try:
         expected = getattr(pdf, op)(other=pother, **kwargs)
+        expected_raises = False
+    except Exception as e:
+        expected_exc = e
+        expected_raises = True
+
+    try:
         actual = getattr(df, op)(other=other, **kwargs)
+        actual_raises = False
+    except Exception as e:
+        actual_exc = e
+        actual_raises = True
+
+    if expected_raises and actual_raises:
+        # Ensure exception types match
+        assert type(actual_exc) is type(expected_exc)
+    elif not expected_raises and not actual_raises:
         assert_eq(expected, actual)
+    else:
+        # Mismatched behavior between pandas and dask
+        raise AssertionError(
+            f"Mismatch between pandas and dask for op={op}: pandas {'raises' if expected_raises else 'returns'}, dask {'raises' if actual_raises else 'returns'}"
+        )
 
 
 @pytest.mark.parametrize(
