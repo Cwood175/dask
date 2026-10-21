@@ -117,10 +117,21 @@ def pack_exception(e, dumps):
     tb = _pack_traceback(exc_traceback)
     try:
         result = dumps((e, tb))
-    except Exception as e:
-        exc_type, exc_value, exc_traceback = sys.exc_info()
-        tb = _pack_traceback(exc_traceback)
-        result = dumps((e, tb))
+    except Exception as pack_exc:
+        # First fallback: try a safe, serializable representation of the exception
+        try:
+            result = dumps((repr(e), tb))
+        except Exception:
+            # Second fallback: ensure both exception and traceback are plain strings
+            try:
+                result = dumps((repr(e), repr(tb)))
+            except Exception:
+                # Last resort: minimal serializable message
+                try:
+                    result = dumps(("<unserializable-exception>",))
+                except Exception:
+                    # If dumps is completely broken, raise the original packing error
+                    raise pack_exc
     return result
 
 

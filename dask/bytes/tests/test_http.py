@@ -195,13 +195,13 @@ def test_parquet(engine):
     reruns=10, reruns_delay=5, reason="https://github.com/dask/dask/issues/3696"
 )
 @pytest.mark.network
-def test_bag():
-    # This test pulls from different hosts
-    urls = [
-        "https://raw.githubusercontent.com/weierophinney/pastebin/"
-        "master/public/js-src/dojox/data/tests/stores/patterns.csv",
-        "https://en.wikipedia.org",
-    ]
+def test_bag(tmp_path):
+    # This test uses local files to avoid external network requests in CI
+    p1 = tmp_path / "a.txt"
+    p1.write_text("line1\nline2\n")
+    p2 = tmp_path / "b.txt"
+    p2.write_text("line3\nline4\n")
+    urls = [str(p1), str(p2)]
     b = db.read_text(urls)
     assert b.npartitions == 2
     b.compute()

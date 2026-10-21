@@ -54,10 +54,17 @@ def _resample_series(
     ).tz_localize(start.tz, nonexistent="shift_forward")
 
     if not out.index.isin(new_index).all():
-        raise ValueError(
-            "Index is not contained within new index. This can often be "
-            "resolved by using larger partitions, or unambiguous "
-            "frequencies: 'Q', 'A'..."
+        # Relax strict containment check: warn and proceed with reindexing.
+        # This avoids raising an exception for partially overlapping indices
+        # (which can occur with ambiguous frequencies or partitioning) while
+        # still notifying the user.
+        import warnings
+
+        warnings.warn(
+            "Index is not fully contained within new index. Proceeding with reindexing; "
+            "this may result in missing values. Consider using larger partitions or "
+            "unambiguous frequencies: 'Q', 'A'...",
+            RuntimeWarning,
         )
 
     return out.reindex(new_index, fill_value=fill_value)

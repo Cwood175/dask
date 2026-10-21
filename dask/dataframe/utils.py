@@ -302,7 +302,14 @@ def _nonempty_scalar(x):
         return make_scalar(x)
 
     if np.isscalar(x):
-        dtype = x.dtype if hasattr(x, "dtype") else np.dtype(type(x))
+        if hasattr(x, "dtype"):
+            dtype = x.dtype
+        else:
+            try:
+                dtype = np.dtype(type(x))
+            except (TypeError, ValueError):
+                # Fall back to object dtype for types that numpy can't construct a dtype for
+                dtype = np.dtype(object)
         return make_scalar(dtype)
 
     if x is pd.NA:
