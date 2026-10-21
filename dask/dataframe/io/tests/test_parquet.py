@@ -1082,9 +1082,14 @@ def test_categories(tmpdir, engine):
     cats_set = ddf2.map_partitions(lambda x: x.y.cat.categories.sort_values()).compute()
     assert cats_set.tolist() == ["a", "c", "a", "b"]
 
-    with pytest.raises(ValueError) or pytest.warns(FutureWarning):
-        # attempt to load as category unknown column
-        dd.read_parquet(fn, categories=["foo"], engine=engine)
+    try:
+        with pytest.raises(ValueError):
+            # attempt to load as category unknown column
+            dd.read_parquet(fn, categories=["foo"], engine=engine)
+    except AssertionError:
+        # No ValueError raised; ensure a FutureWarning is emitted instead
+        with pytest.warns(FutureWarning):
+            dd.read_parquet(fn, categories=["foo"], engine=engine)
 
 
 @pytest.mark.xfail_with_pyarrow_strings  # https://github.com/apache/arrow/issues/33727
@@ -2607,7 +2612,7 @@ def test_pandas_timestamp_overflow_pyarrow(tmpdir):
                 if pa.types.is_timestamp(col.type) and (
                     col.type.unit in ("s", "ms", "us")
                 ):
-                    multiplier = {"s": 1_0000_000_000, "ms": 1_000_000, "us": 1_000}[
+                    multiplier = {"s": 1_000_000_000, "ms": 1_000_000, "us": 1_000}[
                         col.type.unit
                     ]
 
@@ -3311,7 +3316,7 @@ def test_roundtrip_decimal_dtype(tmpdir):
 
     data = [
         {
-            "ts": pd.to_datetime("2021-01-01", utc="Europe/Berlin"),
+            "ts": pd.to_datetime("2021-01-01").tz_localize("Europe/Berlin"),
             "col1": Decimal("123.00"),
         }
         for i in range(23)
@@ -3340,7 +3345,7 @@ def test_roundtrip_date_dtype(tmpdir):
 
     data = [
         {
-            "ts": pd.to_datetime("2021-01-01", utc="Europe/Berlin"),
+            "ts": pd.to_datetime("2021-01-01").tz_localize("Europe/Berlin"),
             "col1": date(2020, 10, 10),
         }
         for _ in range(23)

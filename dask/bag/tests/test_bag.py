@@ -885,61 +885,70 @@ def test_to_dataframe():
     pd = pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
 
-    def check_parts(df, sol):
-        assert all(
-            (p.dtypes == sol.dtypes).all() for p in dask.compute(*df.to_delayed())
-        )
+    import warnings
 
-    dsk = {("test", 0): [(1, 2)], ("test", 1): [], ("test", 2): [(10, 20), (100, 200)]}
-    b = Bag(dsk, "test", 3)
-    sol = pd.DataFrame(b.compute(), columns=["a", "b"])
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", pd.errors.Pandas4Warning)
 
-    # Elements are tuples
-    df = b.to_dataframe()
-    dd.utils.assert_eq(df, sol.rename(columns={"a": 0, "b": 1}), check_index=False)
-    df = b.to_dataframe(columns=["a", "b"])
-    dd.utils.assert_eq(df, sol, check_index=False)
-    check_parts(df, sol)
-    df = b.to_dataframe(meta=[("a", "i8"), ("b", "i8")])
-    dd.utils.assert_eq(df, sol, check_index=False)
-    check_parts(df, sol)
+        def check_parts(df, sol):
+            assert all(
+                (p.dtypes == sol.dtypes).all() for p in dask.compute(*df.to_delayed())
+            )
 
-    # Elements are dictionaries
-    b = b.map(lambda x: dict(zip(["a", "b"], x)))
-    df = b.to_dataframe()
-    dd.utils.assert_eq(df, sol, check_index=False)
-    check_parts(df, sol)
-    assert df._name == b.to_dataframe()._name
+        dsk = {
+            ("test", 0): [(1, 2)],
+            ("test", 1): [],
+            ("test", 2): [(10, 20), (100, 200)],
+        }
+        b = Bag(dsk, "test", 3)
+        sol = pd.DataFrame(b.compute(), columns=["a", "b"])
 
-    # With metadata specified
-    for meta in [sol, [("a", "i8"), ("b", "i8")]]:
-        df = b.to_dataframe(meta=meta)
+        # Elements are tuples
+        df = b.to_dataframe()
+        dd.utils.assert_eq(df, sol.rename(columns={"a": 0, "b": 1}), check_index=False)
+        df = b.to_dataframe(columns=["a", "b"])
+        dd.utils.assert_eq(df, sol, check_index=False)
+        check_parts(df, sol)
+        df = b.to_dataframe(meta=[("a", "i8"), ("b", "i8")])
         dd.utils.assert_eq(df, sol, check_index=False)
         check_parts(df, sol)
 
-    # Error to specify both columns and meta
-    with pytest.raises(ValueError):
-        b.to_dataframe(columns=["a", "b"], meta=sol)
-
-    # Inference fails if empty first partition
-    b2 = b.filter(lambda x: x["a"] > 200)
-    with pytest.raises(ValueError):
-        b2.to_dataframe()
-
-    # Single column
-    b = b.pluck("a")
-    sol = sol[["a"]]
-    df = b.to_dataframe(meta=sol)
-    dd.utils.assert_eq(df, sol, check_index=False)
-    check_parts(df, sol)
-
-    # Works with iterators and tuples
-    sol = pd.DataFrame({"a": range(100)})
-    b = db.from_sequence(range(100), npartitions=5)
-    for f in [iter, tuple]:
-        df = b.map_partitions(f).to_dataframe(meta=sol)
+        # Elements are dictionaries
+        b = b.map(lambda x: dict(zip(["a", "b"], x)))
+        df = b.to_dataframe()
         dd.utils.assert_eq(df, sol, check_index=False)
         check_parts(df, sol)
+        assert df._name == b.to_dataframe()._name
+
+        # With metadata specified
+        for meta in [sol, [("a", "i8"), ("b", "i8")]]:
+            df = b.to_dataframe(meta=meta)
+            dd.utils.assert_eq(df, sol, check_index=False)
+            check_parts(df, sol)
+
+        # Error to specify both columns and meta
+        with pytest.raises(ValueError):
+            b.to_dataframe(columns=["a", "b"], meta=sol)
+
+        # Inference fails if empty first partition
+        b2 = b.filter(lambda x: x["a"] > 200)
+        with pytest.raises(ValueError):
+            b2.to_dataframe()
+
+        # Single column
+        b = b.pluck("a")
+        sol = sol[["a"]]
+        df = b.to_dataframe(meta=sol)
+        dd.utils.assert_eq(df, sol, check_index=False)
+        check_parts(df, sol)
+
+        # Works with iterators and tuples
+        sol = pd.DataFrame({"a": range(100)})
+        b = db.from_sequence(range(100), npartitions=5)
+        for f in [iter, tuple]:
+            df = b.map_partitions(f).to_dataframe(meta=sol)
+            dd.utils.assert_eq(df, sol, check_index=False)
+            check_parts(df, sol)
 
 
 ext_open = [("gz", GzipFile), ("bz2", BZ2File), ("", open)]

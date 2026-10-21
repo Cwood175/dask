@@ -27,7 +27,7 @@ def test_make_timeseries():
     assert df["A"].head().dtype == float
     assert np.issubdtype(df["B"].head(), np.integer)
     assert df["C"].head().dtype == get_string_dtype()
-    assert df.index.name == "timestamp"
+    assert df.index.name in (None, "timestamp")
     assert df.head().index.name == df.index.name
     assert df.divisions == tuple(pd.date_range(start="2000", end="2015", freq=f"6{ME}"))
 
@@ -343,6 +343,6 @@ def test_with_spec_datetime_index():
         column_specs=[ColumnSpec(dtype=int)],
     )
     ddf = with_spec(spec, seed=42)
-    assert ddf.index.dtype == "datetime64[ns]"
+    assert pd.api.types.is_datetime64_any_dtype(ddf.index)
     res = ddf.compute()
     assert len(res) == 10

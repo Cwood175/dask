@@ -54,7 +54,8 @@ def test_numel(dtype, keepdims, nan):
 
     for length in range(x.ndim):
         for sub in itertools.combinations([d for d in range(x.ndim)], length):
-            ssub = np.random.default_rng().shuffle(list(sub))
+            ssub = list(sub)
+            np.random.default_rng().shuffle(ssub)
             assert_eq(
                 numel(x, axis=ssub, keepdims=keepdims, dtype=dtype),
                 _sum(x, axis=ssub, keepdims=keepdims, dtype=dtype),
@@ -986,7 +987,6 @@ def test_quantile(rechunk, q, axis):
 
 @pytest.mark.parametrize("func", [da.quantile, da.nanquantile, da.nanpercentile])
 def test_quantile_func_family_with_axis_none(func):
-
     # Check that these functions raise a NotImplementedError
     # when axis=None and more than one chunk is present
     # along at least one dimension

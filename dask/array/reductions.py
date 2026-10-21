@@ -1581,16 +1581,18 @@ def quantile(
     if builtins.any(a.numblocks[ax] > 1 for ax in axis):
         a = a.rechunk({ax: -1 if ax in axis else "auto" for ax in range(a.ndim)})
 
+    # Build kwargs for underlying numpy.quantile depending on numpy version
     if NUMPY_GE_200:
-        kwargs = {"weights": weights}
+        # Newer NumPy uses 'method' and accepts 'weights'
+        kwargs = {"weights": weights, "method": method}
     else:
-        kwargs = {}
+        # Older NumPy uses 'interpolation' and may not accept 'method'
+        kwargs = {"interpolation": interpolation}
+        # Do not pass 'method' to older NumPy
 
     result = a.map_blocks(
         np.quantile,
         q=q,
-        method=method,
-        interpolation=interpolation,
         axis=axis,
         keepdims=keepdims,
         drop_axis=axis if not keepdims else None,
@@ -1638,15 +1640,25 @@ def _custom_quantile(
     ):
         # bail to nanquantile. Assumptions are pretty strict for now but we
         # do cover the xarray.quantile case.
-        return np.nanquantile(
-            a,
-            q,
-            axis=axis,
-            method=method,
-            interpolation=interpolation,
-            keepdims=keepdims,
-            **kwargs,
-        )
+        # Ensure we pass kwargs compatible with the installed NumPy
+        if NUMPY_GE_200:
+            return np.nanquantile(
+                a,
+                q,
+                axis=axis,
+                method=method,
+                keepdims=keepdims,
+                **kwargs,
+            )
+        else:
+            return np.nanquantile(
+                a,
+                q,
+                axis=axis,
+                interpolation=interpolation,
+                keepdims=keepdims,
+                **kwargs,
+            )
     # nanquantile in NumPy is pretty slow if the quantile axis is slow because
     # each quantile has overhead.
     # This method works around this by calculating the quantile manually.
@@ -1744,12 +1756,15 @@ def nanquantile(
         kwargs = {"quantiles": q}
     else:
         func = _custom_quantile
+        # Build kwargs compatible with installed NumPy: do not pass the removed
+        # 'interpolation' kw to newer NumPy versions.
         kwargs = {
             "q": q,
             "method": method,
-            "interpolation": interpolation,
             "keepdims": keepdims,
         }
+        if not NUMPY_GE_200:
+            kwargs["interpolation"] = interpolation
         if NUMPY_GE_200:
             kwargs.update({"weights": weights})
 

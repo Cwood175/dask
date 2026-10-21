@@ -7,8 +7,6 @@ import operator
 import os
 import pickle
 import re
-import sys
-import traceback
 import uuid
 import warnings
 from bisect import bisect
@@ -61,9 +59,8 @@ from dask.base import (
     persist,
     tokenize,
 )
-from dask.blockwise import BlockwiseDep
+from dask.blockwise import BlockwiseDep, broadcast_dimensions
 from dask.blockwise import blockwise as core_blockwise
-from dask.blockwise import broadcast_dimensions
 from dask.context import globalmethod
 from dask.core import quote, reshapelist
 from dask.delayed import Delayed, delayed
@@ -487,31 +484,11 @@ def apply_infer_dtype(func, args, kwargs, funcname, suggest_dtype="dtype", nout=
     try:
         with np.errstate(all="ignore"):
             o = func(*args, **kwargs)
-    except Exception as e:
-        exc_type, exc_value, exc_traceback = sys.exc_info()
-        tb = "".join(traceback.format_tb(exc_traceback))
-        suggest = (
-            (
-                "Please specify the dtype explicitly using the "
-                "`{dtype}` kwarg.\n\n".format(dtype=suggest_dtype)
-            )
-            if suggest_dtype
-            else ""
-        )
-        msg = (
-            f"`dtype` inference failed in `{funcname}`.\n\n"
-            f"{suggest}"
-            "Original error is below:\n"
-            "------------------------\n"
-            f"{e!r}\n\n"
-            "Traceback:\n"
-            "---------\n"
-            f"{tb}"
-        )
-    else:
-        msg = None
-    if msg is not None:
-        raise ValueError(msg)
+    except Exception:
+        # Re-raise the original exception so that callers see the original
+        # error type and traceback rather than being replaced by a generic
+        # ValueError. This preserves the root cause for easier debugging.
+        raise
     return getattr(o, "dtype", type(o)) if nout is None else tuple(e.dtype for e in o)
 
 
@@ -836,10 +813,11 @@ def map_blocks(
     original_kwargs = kwargs
 
     if dtype is None and meta is None:
-        try:
-            meta = compute_meta(func, dtype, *args, **kwargs)
-        except Exception:
-            pass
+        # Attempt to compute meta; if this fails we propagate the original
+        # exception rather than silently swallowing it. Silent swallowing
+        # masked the original error and resulted in an opaque dtype
+        # inference failure message.
+        meta = compute_meta(func, dtype, *args, **kwargs)
 
         dtype = apply_infer_dtype(func, args, original_kwargs, "map_blocks")
 
@@ -2743,7 +2721,6 @@ class Array(DaskMethodsMixin):
             out=out,
         )
 
-    @wraps(map_blocks)
     def map_blocks(self, func, *args, **kwargs):
         return map_blocks(func, self, *args, **kwargs)
 
@@ -2918,7 +2895,10 @@ class Array(DaskMethodsMixin):
             raise ValueError("Order must be one of 'C' or 'F'")
 
         return self.map_blocks(
-            chunk.view, dtype, order=order, dtype=dtype, chunks=chunks
+            lambda arr, dtype=None, order=None: arr.view(dtype=dtype, order=order),
+            dtype=dtype,
+            order=order,
+            chunks=chunks,
         )
 
     def swapaxes(self, axis1, axis2):
@@ -4216,7 +4196,9 @@ def unify_chunks(*args, **kwargs):
                 (
                     chunkss[j]
                     if a.shape[n] > 1
-                    else a.shape[n] if not np.isnan(sum(chunkss[j])) else None
+                    else a.shape[n]
+                    if not np.isnan(sum(chunkss[j]))
+                    else None
                 )
                 for n, j in enumerate(i)
             )
@@ -4877,8 +4859,9 @@ def broadcast_shapes(*shapes):
             dim = 0 if 0 in sizes else np.max(sizes).item()
         if any(i not in [-1, 0, 1, dim] and not np.isnan(i) for i in sizes):
             raise ValueError(
-                "operands could not be broadcast together with "
-                "shapes {}".format(" ".join(map(str, shapes)))
+                "operands could not be broadcast together with " "shapes {}".format(
+                    " ".join(map(str, shapes))
+                )
             )
         out.append(dim)
     return tuple(reversed(out))
@@ -4971,10 +4954,9 @@ def elemwise(op, *args, out=None, where=True, dtype=None, name=None, **kwargs):
             )
             for a in args
         ]
-        try:
-            dtype = apply_infer_dtype(op, vals, {}, "elemwise", suggest_dtype=False)
-        except Exception:
-            return NotImplemented
+        # Do not swallow errors from dtype inference; let the original
+        # exception propagate so callers can see the root cause.
+        dtype = apply_infer_dtype(op, vals, {}, "elemwise", suggest_dtype=False)
         need_enforce_dtype = any(
             not is_scalar_for_elemwise(a) and a.ndim == 0 for a in args
         )
@@ -5083,7 +5065,8 @@ def _enforce_dtype(*args, **kwargs):
 
     result = function(*args, **kwargs)
     if hasattr(result, "dtype") and dtype != result.dtype and dtype != object:
-        if not np.can_cast(result, dtype, casting="same_kind"):
+        # Use the dtype attribute for can_cast
+        if not np.can_cast(result.dtype, dtype, casting="same_kind"):
             raise ValueError(
                 "Inferred dtype from function %r was %r "
                 "but got %r, which can't be cast using "
@@ -5093,7 +5076,7 @@ def _enforce_dtype(*args, **kwargs):
         if np.isscalar(result):
             # scalar astype method doesn't take the keyword arguments, so
             # have to convert via 0-dimensional array and back.
-            result = result.astype(dtype)
+            result = np.asarray(result).astype(dtype)
         else:
             try:
                 result = result.astype(dtype, copy=False)
