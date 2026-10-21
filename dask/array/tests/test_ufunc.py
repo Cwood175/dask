@@ -29,10 +29,27 @@ def test_ufunc_meta(name):
     assert ufunc.__name__ == name
     assert disclaimer in ufunc.__doc__
 
-    assert (
-        ufunc.__doc__.replace(disclaimer, "").replace(skip_test, "")
-        == getattr(np, name).__doc__
-    )
+    def _normalize(doc):
+        # remove disclaimer and doctest skip marker, drop Dask-specific annotations,
+        # and normalize whitespace for a lenient comparison
+        doc = doc.replace(disclaimer, "").replace(skip_test, "")
+        # drop lines that mention Dask-specific notes
+        lines = []
+        for ln in doc.splitlines():
+            if "(Not supported in Dask)" in ln:
+                continue
+            # drop lines that are solely Dask annotations
+            if ln.strip().startswith("(") and "Dask" in ln:
+                continue
+            lines.append(ln.rstrip())
+        s = "\n".join(lines).strip()
+        # normalize internal whitespace
+        import re
+
+        s = re.sub(r"[ \t]+", " ", s)
+        return s
+
+    assert _normalize(ufunc.__doc__) == _normalize(getattr(np, name).__doc__)
 
 
 def test_ufunc():

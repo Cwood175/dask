@@ -61,9 +61,8 @@ from dask.base import (
     persist,
     tokenize,
 )
-from dask.blockwise import BlockwiseDep
+from dask.blockwise import BlockwiseDep, broadcast_dimensions
 from dask.blockwise import blockwise as core_blockwise
-from dask.blockwise import broadcast_dimensions
 from dask.context import globalmethod
 from dask.core import quote, reshapelist
 from dask.delayed import Delayed, delayed
@@ -508,6 +507,8 @@ def apply_infer_dtype(func, args, kwargs, funcname, suggest_dtype="dtype", nout=
             "---------\n"
             f"{tb}"
         )
+        # Preserve exception chaining so callers can see the original error
+        raise ValueError(msg) from e
     else:
         msg = None
     if msg is not None:
@@ -839,7 +840,10 @@ def map_blocks(
         try:
             meta = compute_meta(func, dtype, *args, **kwargs)
         except Exception:
-            pass
+            # Surface errors from compute_meta rather than silently ignoring them.
+            # This ensures the original exception (and traceback) is preserved
+            # instead of being masked by subsequent dtype-inference handling.
+            raise
 
         dtype = apply_infer_dtype(func, args, original_kwargs, "map_blocks")
 
@@ -4216,7 +4220,9 @@ def unify_chunks(*args, **kwargs):
                 (
                     chunkss[j]
                     if a.shape[n] > 1
-                    else a.shape[n] if not np.isnan(sum(chunkss[j])) else None
+                    else a.shape[n]
+                    if not np.isnan(sum(chunkss[j]))
+                    else None
                 )
                 for n, j in enumerate(i)
             )
@@ -4877,8 +4883,9 @@ def broadcast_shapes(*shapes):
             dim = 0 if 0 in sizes else np.max(sizes).item()
         if any(i not in [-1, 0, 1, dim] and not np.isnan(i) for i in sizes):
             raise ValueError(
-                "operands could not be broadcast together with "
-                "shapes {}".format(" ".join(map(str, shapes)))
+                "operands could not be broadcast together with " "shapes {}".format(
+                    " ".join(map(str, shapes))
+                )
             )
         out.append(dim)
     return tuple(reversed(out))

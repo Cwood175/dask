@@ -139,6 +139,9 @@ class CreationDispatch(Generic[BackendEntrypointType]):
                 try:
                     return func(*args, **kwargs)
                 except Exception as e:
+                    # Do not wrap Warning subclasses (e.g., pandas warnings) — re-raise them
+                    if isinstance(e, Warning):
+                        raise
                     try:
                         exc = type(e)(
                             f"An error occurred while calling the {funcname(func)} "
@@ -146,7 +149,8 @@ class CreationDispatch(Generic[BackendEntrypointType]):
                             f"Original Message: {e}"
                         )
                     except TypeError:
-                        raise e
+                        # Re-raise the original exception to preserve traceback
+                        raise
                     else:
                         raise exc from e
 

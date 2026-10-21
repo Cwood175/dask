@@ -1586,18 +1586,32 @@ def quantile(
     else:
         kwargs = {}
 
-    result = a.map_blocks(
-        np.quantile,
-        q=q,
-        method=method,
-        interpolation=interpolation,
-        axis=axis,
-        keepdims=keepdims,
-        drop_axis=axis if not keepdims else None,
-        new_axis=0 if isinstance(q, Iterable) else None,
-        chunks=_get_quantile_chunks(a, q, axis, keepdims),
-        **kwargs,
-    )
+    # NumPy >= 2.0 uses 'method' instead of 'interpolation'. Only pass the
+    # supported keyword to np.quantile depending on the NumPy version to avoid
+    # TypeError: unexpected keyword 'interpolation'.
+    if NUMPY_GE_200:
+        result = a.map_blocks(
+            np.quantile,
+            q=q,
+            method=method,
+            axis=axis,
+            keepdims=keepdims,
+            drop_axis=axis if not keepdims else None,
+            new_axis=0 if isinstance(q, Iterable) else None,
+            chunks=_get_quantile_chunks(a, q, axis, keepdims),
+            **kwargs,
+        )
+    else:
+        result = a.map_blocks(
+            np.quantile,
+            q=q,
+            interpolation=interpolation,
+            axis=axis,
+            keepdims=keepdims,
+            drop_axis=axis if not keepdims else None,
+            new_axis=0 if isinstance(q, Iterable) else None,
+            chunks=_get_quantile_chunks(a, q, axis, keepdims),
+        )
 
     result = handle_out(out, result)
     return result
@@ -1638,15 +1652,26 @@ def _custom_quantile(
     ):
         # bail to nanquantile. Assumptions are pretty strict for now but we
         # do cover the xarray.quantile case.
-        return np.nanquantile(
-            a,
-            q,
-            axis=axis,
-            method=method,
-            interpolation=interpolation,
-            keepdims=keepdims,
-            **kwargs,
-        )
+        # Only pass the keyword that NumPy supports to avoid unexpected keyword
+        # argument errors between NumPy versions (interpolation vs method).
+        if NUMPY_GE_200:
+            return np.nanquantile(
+                a,
+                q,
+                axis=axis,
+                method=method,
+                keepdims=keepdims,
+                **kwargs,
+            )
+        else:
+            return np.nanquantile(
+                a,
+                q,
+                axis=axis,
+                interpolation=interpolation,
+                keepdims=keepdims,
+                **kwargs,
+            )
     # nanquantile in NumPy is pretty slow if the quantile axis is slow because
     # each quantile has overhead.
     # This method works around this by calculating the quantile manually.
@@ -1744,14 +1769,13 @@ def nanquantile(
         kwargs = {"quantiles": q}
     else:
         func = _custom_quantile
-        kwargs = {
-            "q": q,
-            "method": method,
-            "interpolation": interpolation,
-            "keepdims": keepdims,
-        }
+        # Only pass the keyword supported by the installed NumPy version.
         if NUMPY_GE_200:
-            kwargs.update({"weights": weights})
+            kwargs = {"q": q, "method": method, "keepdims": keepdims}
+            if weights is not None:
+                kwargs.update({"weights": weights})
+        else:
+            kwargs = {"q": q, "interpolation": interpolation, "keepdims": keepdims}
 
     result = a.map_blocks(
         func,

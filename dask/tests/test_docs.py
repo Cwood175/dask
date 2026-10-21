@@ -20,6 +20,10 @@ def test_development_guidelines_matches_ci(filename):
     if not (root_dir / ".github" / "workflows").exists():
         pytest.skip("Test can only be run on an editable install")
 
+    target = root_dir / filename
+    if not target.exists():
+        pytest.skip(f"File {filename!s} is not present in this checkout")
+
     latest_env = "environment-3.12.yaml"
-    with open(root_dir / filename, encoding="utf8") as f:
+    with open(target, encoding="utf8") as f:
         assert latest_env in f.read()

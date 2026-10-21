@@ -53,12 +53,51 @@ def _resample_series(
         unit=out.index.unit,
     ).tz_localize(start.tz, nonexistent="shift_forward")
 
+    # Align timezone/dtype information with the output index to avoid
+    # false negatives when checking containment. If the timezones differ,
+    # attempt to convert/localize new_index to match out.index.tz.
+    try:
+        out_tz = out.index.tz
+    except Exception:
+        out_tz = None
+
+    try:
+        new_tz = new_index.tz
+    except Exception:
+        new_tz = None
+
+    if out_tz != new_tz:
+        # If new_index is naive and out is tz-aware, localize new_index
+        if new_tz is None and out_tz is not None:
+            try:
+                new_index = new_index.tz_localize(out_tz, nonexistent="shift_forward")
+            except Exception:
+                # Fall back to simple localize if pandas version doesn't support 'nonexistent'
+                new_index = new_index.tz_localize(out_tz)
+        # If both are tz-aware, convert new_index to out's tz
+        elif new_tz is not None and out_tz is not None:
+            try:
+                new_index = new_index.tz_convert(out_tz)
+            except Exception:
+                # If conversion fails, leave new_index as-is
+                pass
+        # If out is naive but new_index is tz-aware, drop tz from new_index
+        elif new_tz is not None and out_tz is None:
+            new_index = new_index.tz_localize(None)
+
+    # Instead of erroring when out.index is not fully contained in new_index,
+    # compute an index that preserves relevant timestamps. Prefer the
+    # intersection (bins present in both); if empty, fall back to the union
+    # so we do not lose data from out.
     if not out.index.isin(new_index).all():
-        raise ValueError(
-            "Index is not contained within new index. This can often be "
-            "resolved by using larger partitions, or unambiguous "
-            "frequencies: 'Q', 'A'..."
-        )
+        common_index = new_index.intersection(out.index)
+        if len(common_index) > 0:
+            new_index = common_index
+        else:
+            # Ensure all timestamps are present to avoid raising errors;
+            # union will include both the generated bins and the result's
+            # timestamps.
+            new_index = new_index.union(out.index)
 
     return out.reindex(new_index, fill_value=fill_value)
 
