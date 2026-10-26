@@ -17,7 +17,7 @@ from pandas.api.types import is_dtype_equal
 import dask
 from dask.base import is_dask_collection
 from dask.core import get_deps
-from dask.dataframe._compat import PANDAS_GE_300, tm  # noqa: F401
+from dask.dataframe._compat import PANDAS_GE_300, tm
 from dask.dataframe.dispatch import (  # noqa : F401
     is_categorical_dtype_dispatch,
     make_meta,
@@ -129,8 +129,8 @@ def insert_meta_param_description(*args, **kwargs):
             parameter_header = "Parameters\n%s----------" % indent[4:]
             first, last = re.split("Parameters\\n[ ]*----------", f.__doc__)
             parameters, rest = last.split("\n\n", 1)
-            f.__doc__ = "{}{}{}\n{}{}\n\n{}".format(
-                first, parameter_header, parameters, indent[4:], descr, rest
+            f.__doc__ = (
+                f"{first}{parameter_header}{parameters}\n{indent[4:]}{descr}\n\n{rest}"
             )
     return f
 
@@ -271,7 +271,7 @@ _simple_fake_mapping: dict[str, Any] = {
     "b": np.bool_(True),
     "V": np.void(b" "),
     "M": np.datetime64("1970-01-01"),
-    "m": np.timedelta64(1),
+    "m": np.timedelta64(1, "D"),
     "S": np.str_("foo"),
     "a": np.str_("foo"),
     "U": np.str_("foo"),
@@ -355,10 +355,7 @@ def check_meta(x, meta, funcname=None, numeric_equal=True):
     # Notice, we use .__class__ as opposed to type() in order to support
     # object proxies see <https://github.com/dask/dask/pull/6981>
     if x.__class__ != meta.__class__:
-        errmsg = "Expected partition of type `{}` but got `{}`".format(
-            typename(type(meta)),
-            typename(type(x)),
-        )
+        errmsg = f"Expected partition of type `{typename(type(meta))}` but got `{typename(type(x))}`"
     elif is_dataframe_like(meta):
         dtypes = pd.concat([x.dtypes, meta.dtypes], axis=1, sort=True)
         bad_dtypes = [
@@ -389,7 +386,7 @@ def check_meta(x, meta, funcname=None, numeric_equal=True):
 
 
 def check_matching_columns(meta, actual):
-    import dask.dataframe.methods as methods
+    from dask.dataframe import methods
 
     # Need nan_to_num otherwise nan comparison gives False
     if not np.array_equal(np.nan_to_num(meta.columns), np.nan_to_num(actual.columns)):
@@ -493,7 +490,7 @@ def _check_dask(dsk, check_names=True, check_dtypes=True, result=None, scheduler
 
 
 def _maybe_sort(a, check_index: bool):
-    import dask.dataframe.methods as methods
+    from dask.dataframe import methods
 
     # sort by value, then index
     try:
